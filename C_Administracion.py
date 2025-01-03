@@ -2,6 +2,8 @@ import os
 import re
 from PyPDF2 import PdfReader
 import logging
+import string
+
 # Suppress warnings from PyPDF2
 logging.getLogger("PyPDF2").setLevel(logging.ERROR)
 
@@ -15,7 +17,7 @@ def main():
             "End Date": "dd/mm/yyyy",
             "Type": ["formalizado", "no formalizado"],
             "SKU": dict,  # {'sku': (pieces, price)}
-            "Calendar": ["true", "false"]
+            "Calendario": ["true", "false"]
         },
         "modificatory_contract_pattern": {
             "Primigenio": str,
@@ -25,11 +27,20 @@ def main():
             "End Date": "31/12/2024",
             "Type": ["formalizado", "no formalizado"],
             "SKU": dict,  # {'sku': (pieces, price)}
-            "Calendar": ["true", "false"]
+            "Calendario": ["true", "false"]
         }
     }
 
     dict_data_to_process = A_Feed_new_file(source_directory, patterns)
+    
+    if dict_data_to_process is None:
+        print("\nNo se encontraron archivos para procesar.")
+    else:
+        print("\nArchivos para procesar:")
+        for key, value in dict_data_to_process.items():
+            relative_path = key.replace(source_directory + os.sep, "")
+            print(f"{relative_path}: {value}\n")
+
 
 def A_Feed_new_file(source_directory, patterns):
     # Define the temporary danger path
@@ -67,42 +78,75 @@ def A_Feed_new_file(source_directory, patterns):
 
     return renamed_files
 
+
+
 def A1_extract_pattern(PDF_files, patterns):
+    # Suppress PyPDF2 logging
+    logging.getLogger("PyPDF2").setLevel(logging.ERROR)
+
     ok_pdf_files = {}
     not_ok_files = []
 
-    # Compile patterns for primal and modificatory contracts
-    primal_pattern = re.compile(r'\{.*Contract Code:.*?\}')
-    modificatory_pattern = re.compile(r'\{.*Primigenio:.*?\}')
+    # Define regex for detecting the pattern type Esto no me deja tranquilo, creo que podemos construirlos dinámicamente. Por ahora continuemos. 
+    primal_identifier = "Contract Code"
+    modificatory_identifier = "Primigenio"
 
     for pdf_file in PDF_files:
         try:
-            # Read the PDF content
             reader = PdfReader(pdf_file)
             text = ''.join(page.extract_text() for page in reader.pages)
 
-            # Search for patterns
-            match = primal_pattern.search(text) or modificatory_pattern.search(text)
+            # Find the line with a potential pattern
+            match = re.search(r'\{.*\}', text)
             if match:
                 matched_text = match.group()
-                # Check if matched pattern aligns with defined fields
-                matched = False
-                for pattern_name, fields in patterns.items():
-                    if all(key in matched_text for key in fields.keys()):
-                        ok_pdf_files[pdf_file] = {"pattern": pattern_name, "content": matched_text}
-                        matched = True
-                        break
-                if not matched:
-                    print(f"El archivo {os.path.basename(pdf_file)} tiene un rótulo incompleto: {matched_text}")
+                # Identify the pattern type
+                if primal_identifier in matched_text:
+                    pattern_name = "primal_contract_pattern"
+                elif modificatory_identifier in matched_text:
+                    pattern_name = "modificatory_contract_pattern"
+                else:
+                    print(f"El archivo {os.path.basename(pdf_file)} no coincide con ningún patrón conocido.")
+                    not_ok_files.append(pdf_file)
+                    continue
+
+                # Validate fields for the identified pattern
+                missing_fields = []
+                mismatched_fields = []
+                expected_fields = patterns[pattern_name]
+
+                for field, expected_type in expected_fields.items():
+                    field_match = re.search(fr"{field}: (.*?)(,|}})", matched_text)
+                    if not field_match:
+                        missing_fields.append(field)
+                    else:
+                        field_value = field_match.group(1).strip()
+                        # Validate the field's value type or format
+                        if isinstance(expected_type, list) and field_value not in expected_type:
+                            mismatched_fields.append(f"{field}: {field_value}")
+                        elif expected_type == "dd/mm/yyyy":
+                            if not re.match(r"\d{2}/\d{2}/\d{4}", field_value):
+                                mismatched_fields.append(f"{field}: {field_value}")
+
+                if not missing_fields and not mismatched_fields:
+                    ok_pdf_files[pdf_file] = {"pattern": pattern_name, "content": matched_text}
+                else:
+                    if missing_fields:
+                        print(f"El archivo {os.path.basename(pdf_file)} tiene campos faltantes: {missing_fields}")
+                    if mismatched_fields:
+                        print(f"El archivo {os.path.basename(pdf_file)} tiene campos con valores no válidos: {mismatched_fields}")
                     not_ok_files.append(pdf_file)
             else:
                 print(f"El archivo {os.path.basename(pdf_file)} no contiene rótulo")
                 not_ok_files.append(pdf_file)
+
         except Exception as e:
             print(f"Error procesando {pdf_file}: {e}")
             not_ok_files.append(pdf_file)
 
     return ok_pdf_files, not_ok_files
+
+
 
 def A2_rename_files(ok_pdf_files):
     renamed_files = {}
