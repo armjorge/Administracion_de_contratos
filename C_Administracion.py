@@ -9,6 +9,7 @@ logging.getLogger("PyPDF2").setLevel(logging.ERROR)
 
 def main():
     source_directory = r'C:\Users\armjorge\Dropbox\3. Armando Cuaxospa\Reportes GPT 2025\Administración de contratos'
+    
     patterns = {
         "primal_contract_pattern": {
             "Contract Code": str,
@@ -30,21 +31,26 @@ def main():
             "Calendario": ["true", "false"]
         }
     }
-
-    dict_data_to_process = A_Feed_new_file(source_directory, patterns)
+    user_input = input("¿Qué deseas hacer?\n1. Cargar un nuevo contrato a la base\n2. [To be developed]\nIngrese el número de la opción: ")
     
-    if dict_data_to_process is None:
-        print("\nNo se encontraron archivos para procesar.")
-    else:
-        print("\nArchivos para procesar:")
-        for key, value in dict_data_to_process.items():
-            relative_path = key.replace(source_directory + os.sep, "")
-            print(f"{relative_path}: {value}\n")
+    if user_input == "1":
+        dict_data_to_process = A_Dict_new_files(source_directory, patterns)
+        if dict_data_to_process is None:
+            print("\nNo se encontraron archivos para procesar.")
+        else:
+            print("\nArchivos para procesar:")
+            dict_data_to_process = A2_rename_files(dict_data_to_process, source_directory)
 
+            print("\nIniciando Renombrado y Movimiento de archivos\n")
+            formalizados_path = {"formalizado": os.path.join(source_directory, "Formalizados")}
+            no_formalizados_path = {"no formalizado": os.path.join(source_directory, "No formalizados")}
+            B_rename_and_move(dict_data_to_process, formalizados_path, no_formalizados_path)
 
-def A_Feed_new_file(source_directory, patterns):
+            
+def A_Dict_new_files(source_directory, patterns):
     # Define the temporary danger path
     temp_path = os.path.join(source_directory, "Temp-danger")
+    
 
     # Check if temp_path exists and has files inside
     if os.path.exists(temp_path):
@@ -68,17 +74,15 @@ def A_Feed_new_file(source_directory, patterns):
 
     # Process the PDF files using A1_extract_pattern
     ok_pdf_files, not_ok_files = A1_extract_pattern(pdf_files, patterns)
-
+    print(ok_pdf_files)
     if not ok_pdf_files:
         print("\nNo hay archivos válidos para continuar.")
         return None
 
     print("\nArchivos con patrones válidos encontrados. Procediendo a renombrarlos...")
-    renamed_files = A2_rename_files(ok_pdf_files)
+    renamed_files = A2_rename_files(ok_pdf_files, source_directory)
 
     return renamed_files
-
-
 
 def A1_extract_pattern(PDF_files, patterns):
     # Suppress PyPDF2 logging
@@ -146,9 +150,10 @@ def A1_extract_pattern(PDF_files, patterns):
 
     return ok_pdf_files, not_ok_files
 
-
-
-def A2_rename_files(ok_pdf_files):
+def A2_rename_files(ok_pdf_files, source_directory):
+    """
+    Prepares metadata for renaming files.
+    """
     renamed_files = {}
 
     # Helper function to sanitize filenames
@@ -157,36 +162,80 @@ def A2_rename_files(ok_pdf_files):
         return ''.join(c for c in name if c in allowed_chars)
 
     for file_path, data in ok_pdf_files.items():
-        pattern = data["content"]
+        pattern = data["pattern"]
+        content = data["content"]
 
-        # Extract fields for filename construction
-        contract_code = re.search(r'Contract Code: (.*?),', pattern)
-        modificatorio = re.search(r'Modificatorio: (.*?),', pattern)
-        type_field = re.search(r'Type: (formalizado|no formalizado)', pattern)
+        # Construct filename based on the pattern type
+        if pattern == "primal_contract_pattern":
+            contract_code = re.search(r'Contract Code: (.*?),', content)
+            institution = re.search(r'Institution: (.*?),', content)
+            type_field = re.search(r'Type: (formalizado|no formalizado)', content)
 
-        # Sanitize extracted fields
-        contract_code = sanitize_filename(contract_code.group(1)) if contract_code else ""
-        modificatorio = sanitize_filename(modificatorio.group(1)) if modificatorio else ""
-        type_field = sanitize_filename(type_field.group(1)) if type_field else ""
+            contract_code = sanitize_filename(contract_code.group(1)) if contract_code else ""
+            institution = sanitize_filename(institution.group(1)) if institution else ""
+            type_field = sanitize_filename(type_field.group(1)) if type_field else ""
 
-        # Construct filename
-        filename = f"{contract_code}_{modificatorio}_{type_field}.pdf" if modificatorio else f"{contract_code}_{type_field}.pdf"
+            filename = f"{contract_code}_{institution}_{type_field}.pdf"
 
-        # Check for duplicates
-        if filename in renamed_files.values():
-            print(f"Archivo duplicado detectado: {filename} en {file_path}")
-            print("\nElimine el duplicado antes de continuar. Terminando el script.")
-            return None
+        elif pattern == "modificatory_contract_pattern":
+            primigenio = re.search(r'Primigenio: (.*?),', content)
+            modificatorio = re.search(r'Modificatorio: (.*?),', content)
+            institution = re.search(r'Institution: (.*?),', content)
+            type_field = re.search(r'Type: (formalizado|no formalizado)', content)
 
-        # Add to renamed files
-        renamed_files[file_path] = filename
+            primigenio = sanitize_filename(primigenio.group(1)) if primigenio else ""
+            modificatorio = sanitize_filename(modificatorio.group(1)) if modificatorio else ""
+            institution = sanitize_filename(institution.group(1)) if institution else ""
+            type_field = sanitize_filename(type_field.group(1)) if type_field else ""
 
-    # Print renamed files
-    print("A2 rename files has finished. Archivos renombrados:")
-    for original, renamed in renamed_files.items():
-        print(f"{original} -> {renamed}")
+            filename = f"{primigenio}_{modificatorio}_{institution}_{type_field}.pdf"
+
+        else:
+            print(f"Patrón desconocido para el archivo {file_path}. Saltando...")
+            continue
+
+        # Prepare data for moving
+        renamed_files[file_path] = {
+            "renamed": filename,
+            "pattern": pattern,
+            "content": content,
+            "final_path": None  # To be set in `B_rename_and_move`
+        }
+
+    print("Archivos preparados para renombrar:")
+    for original, data in renamed_files.items():
+        print(f"{original} -> {data['renamed']}")
 
     return renamed_files
+
+def B_rename_and_move(dict_with_data_to_process, *paths_by_type):
+    """
+    Renames and moves files based on their 'Type' and the provided destination paths.
+    """
+    for file_path, data in dict_with_data_to_process.items():
+        renamed_file = data["renamed"]
+        file_type = re.search(r'Type: (formalizado|no formalizado)', data["content"]).group(1)
+
+        # Determine the destination folder
+        destination_folder = None
+        for type_dict in paths_by_type:
+            if file_type in type_dict:
+                destination_folder = type_dict[file_type]
+                break
+
+        if destination_folder:
+            os.makedirs(destination_folder, exist_ok=True)
+            destination_path = os.path.join(destination_folder, renamed_file)
+
+            # Check if the file exists before renaming and moving
+            if os.path.exists(file_path):
+                os.rename(file_path, destination_path)
+                data["final_path"] = destination_path
+                print(f"Archivo '{renamed_file}' movido a '{destination_folder}'")
+            else:
+                print(f"El archivo '{file_path}' no se encontró. Es posible que ya haya sido procesado.")
+        else:
+            print(f"Type: '{file_type}' no considerado en las carpetas.")
 
 if __name__ == "__main__":
     main()
