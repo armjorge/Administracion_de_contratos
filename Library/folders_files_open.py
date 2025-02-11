@@ -17,7 +17,8 @@ def load_dataframe(path, sheet, columns):
         # Load the DataFrame from the specified Excel sheet if the file exists
         df_loaded = pd.read_excel(path, sheet_name=sheet)
         return df_loaded
-    
+
+
 def open_pdf(pdf_path):
     """
     Opens the given PDF file in a system-compatible way.

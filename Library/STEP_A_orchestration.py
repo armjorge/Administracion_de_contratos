@@ -5,22 +5,32 @@ from folders_files_open import create_directory_if_not_exists, load_dataframe
 from STEP_B_Dict import STEP_B_get_string_populated
 from STEP_C_PDFhandling import STEP_C_PDF_HANDLING, STEP_C_read_labeled_pdf
 
-def STEP_A_orchestration(tipo, folder_path):
+
+
+def STEP_A_orchestration(folder_path, df_desagregada_procedimiento, institucion_column, selected_procedimiento):
+    while True:
+        tipo = input("Define el tipo P) Primigenio o M) Modificatorio: ")
+        tipo = tipo.lower()
+        if tipo == 'p':
+            print("Tipo seleccionado: Primigenio")
+            tipo = 'Primigenio'
+            break
+        elif tipo == 'm':
+            print("Tipo seleccionado: Modificatorio")
+            tipo = 'Modificatorio'
+            break
+        else:
+            print("Entrada no válida, por favor elija P o M.")
+    print(tipo)
     working_folder = folder_path
     print("\tIniciando el orquestador para poblar el diccionario")
     PDF_library = os.path.join(working_folder, "PDF_Library")
     create_directory_if_not_exists(PDF_library)
-    desagregada_path = os.path.join(working_folder, "Desagregada.xlsx")
-    desagregada_sheet = 'Emisores contrato'
-    desagregada_columns = ['INSTITUCION HOMOLOGADA', 'EMISOR DEL CONTRATO']
-    df_desagregada = load_dataframe(desagregada_path, desagregada_sheet, desagregada_columns)
-    #df_referencia_interna = os.path.join(working_folder, "processed_files.pickle")
-    temp_directory = os.path.join(working_folder, 'Temp')    
     print("\n\tPASO A: GENERAR DE DICCIONARIO PARA NUEVO CONTRATO\n")
-    human_dict, valid_dict = STEP_B_get_string_populated(df_desagregada, tipo)
+    human_dict, valid_dict = STEP_B_get_string_populated(df_desagregada_procedimiento, tipo, institucion_column, selected_procedimiento)
     print('Diccionario Capturado\n', human_dict, "\nDiccionario Procesado\n", valid_dict)
     print("\n\tPASO C: MANEJAR EL PDF\n")  
-    
+    temp_directory = os.path.join(working_folder, 'Temp')        
     """
     pdf_path_list = [STEP_C_PDF_HANDLING(temp_directory, valid_dict)]
     result_dict = STEP_C_read_labeled_pdf(pdf_path_list, valid_dict)

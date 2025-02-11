@@ -1,18 +1,122 @@
 
 import pandas as pd
 import ast
+import calendar
 
-def STEP_B_get_string_populated(df_clientes, tipo): 
+def STEP_B_contrato(tipo, input_field):
+    while True:
+        if tipo == 'Primigenio' and input_field == 'Contrato':
+            pre_contrato = input("Captura el nombre del contrato: ")
+            print(pre_contrato)
+            respuesta = input("\nConfirmas que es el contrato? Sí o No: ").strip().lower()[0]
+            if respuesta == 's':
+                return pre_contrato
+            elif respuesta == 'n':
+                continue  # This will restart the loop if the answer is no
+
+        elif tipo == 'Primigenio' and input_field == 'Modificatorio':
+            return ""  # Return empty string for Modificatorio when tipo is Primigenio
+
+        elif tipo == 'Modificatorio' and input_field == 'Modificatorio':
+            pre_modificatorio = input("Captura el código del modificatorio: ")
+            print(pre_modificatorio)
+            respuesta = input("\nConfirmas que es el Modificatorio? Sí o No: ").strip().lower()[0]
+            if respuesta == 's':
+                return pre_modificatorio
+            elif respuesta == 'n':
+                continue  # This will restart the loop if the answer is no
+        elif tipo == 'Modificatorio' and input_field == 'Contrato':
+            print(f"Es un {tipo} por lo que ya debemos tener un contrato cargado, accediendo a los datos previos.")
+            break  # Assuming further logic or return is handled here
+        else:
+            print(f"\n\tCombinación de campo {input_field} y tipo {tipo} no considerado en el arbol de decisiones de Contratos, saliendo del código sin return variable\n")
+            break
+
+def input_captura_fechas():
+    input_day = "¿Cuál es día? (2 dígitos)?: "            
+    input_mes = "¿Cuál es mes? (2 dígitos)?: "            
+    input_year = "¿Cuál es el año(4 dígitos)?: "
+    mm_dd_digitos = 2
+    mes_enero = 1
+    mes_diciembre = 12
+    year_digits = 4
+    year_min = 2025
+    year_max = 2060
+    def get_specific_digits_as_string(prompt, needed_digits, min_input, max_input):
+        """
+        Prompts the user for input and validates it using specific conditions:
+        - Input must be numeric.
+        - Input must have the specified number of digits.
+        - Input must fall within the specified range.
+        """
+        while True:
+            user_input = input(prompt)
+            error_message = "Vuelve a intentar"
+            if user_input.isdigit() and len(user_input) == needed_digits and min_input <= int(user_input) <= max_input:
+                return user_input
+            print(f"{error_message}, necesitas meter un número de mín de {min_input} y máx {max_input} caracteres")    
+    mes = get_specific_digits_as_string(input_mes, mm_dd_digitos, mes_enero, mes_diciembre)
+    year = get_specific_digits_as_string(input_year, year_digits, year_min, year_max)
+    day_min = 1
+    # Función para obtener los días máximos de ese mes. 
+    def get_month_days(year, month):
+        """
+        Returns the maximum number of days in a given month for a specific year.
+        
+        Parameters:
+            year (str or int): The year in 4-digit format.
+            month (str): The month in 2-digit string format.
+
+        Returns:
+            int: Maximum number of days in the specified month.
+        """
+
+        # Convert inputs to integers
+        year = int(year)
+        month = int(month)
+
+        # Get the last day of the month
+        day_max = calendar.monthrange(year, month)[1]
+
+        return day_max
+    day_max = get_month_days(year,mes)
+    day = get_specific_digits_as_string(input_day, mm_dd_digitos, day_min, day_max)            
+    date = f"{day}/{mes}/{year}"
+    return date
+
+def STEP_B_fechas(tipo,input_field):
+    while True:
+        print("Capturaremos la fecha de inicio del contrato")
+        if tipo == 'Primigenio' and input_field == 'Fecha Inicio':
+            fecha_inicio = input_captura_fechas()
+            return fecha_inicio
+        elif tipo == 'Primigenio' and input_field == 'Fecha Fin':
+            print("Capturaremos la fecha de terminación del contrato")
+            fecha_final = input_captura_fechas()
+            return fecha_final
+        elif tipo == 'Modificatorio' and input_field == 'Fecha Inicio':
+            print("Árbol de decisión para {tipo} y {input_field} en desarrollo")
+            break
+        elif tipo == 'Modificatorio' and input_field == 'Fecha Fin':
+            print("Árbol de decisión para {tipo} y {input_field} en desarrollo")
+            break
+        else:
+            print(f"\n\tCombinación de campo {input_field} y tipo {tipo} no considerado en el arbol de decisiones de Contratos, saliendo del código sin return variable\n")
+            break
+
+
+def STEP_B_get_string_populated(df_clientes,  tipo, institucion_column, selected_procedimiento): 
     print("\t🛠️ Iniciando la generación del diccionario para el contrato...\n")
     # Crear el diccionario poblado
     orchestration_dict = f"""
     {{
-        'Institución': "{STEP_B_populate_from_df(df_clientes, 'EMISOR DEL CONTRATO')}",
-        'Contrato': "STEP_A_1_GetDate",
-        'Modificatorio': "STEP_A_2_df_fields(df_to_load, 'Proyecto')",
-        'Start Date': "STEP_A_2_df_fields(df_to_load, 'Materia')",
-        'End Date': "STEP_A_3_GetNote(15)",
-        'Estatus': "formalizado",
+        'Institución': "{STEP_B_populate_from_df(df_clientes, institucion_column)}",
+        'Procedimiento': "{selected_procedimiento}",
+        'Contrato': "{STEP_B_contrato(tipo, 'Contrato')}",
+        'Modificatorio': "{STEP_B_contrato(tipo, 'Modificatorio') }",
+        'Fecha Inicio': "{STEP_B_fechas(tipo, 'Fecha Inicio')}",
+        'Fecha Fin': "{STEP_B_fechas(tipo, 'Fecha Fin')}",
+        'Estatus': "",
         'SKU': "funcion_sku(parametros) -> skus = producto: 010.000.4154.00, precio: 207, piezas: 16200"
     }}
     """
